@@ -34,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
             f'Hello {user.first_name}! Please share your phone number to register.', reply_markup=reply_markup
         )
 
-# Menu command handler to show options if user is registered
+# Menu command handler to show options if user is registereda
 async def menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user
     existing_customer = customers_collection.find_one({"telegram_id": user.id})
