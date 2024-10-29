@@ -170,22 +170,31 @@ async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     if subcategories:
         combined_description = f"Category: *{category_name}*\n\n"  # Include the category name
+        inline_buttons = []  # List to hold inline buttons for subcategories
+
         for subcategory in subcategories:
             name = subcategory.get("name", "No Name")
-            description = subcategory.get("description", "No Description")
-            combined_description += f"*{name}*\n{description}\n\n"
+            # Create an inline button for each subcategory
+            inline_buttons.append(
+                [InlineKeyboardButton(name, callback_data=f"subcategory_{subcategory.get('subcategory_id')}")]
+            )
+
+        # Prepare reply markup for inline buttons
+        reply_markup = InlineKeyboardMarkup(inline_buttons)
 
         # Send category image if available
         if category_image_url:
             await update.callback_query.message.reply_photo(
                 photo=category_image_url,
                 caption=combined_description.strip(),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=reply_markup
             )
         else:
             await update.callback_query.message.reply_text(
                 combined_description.strip(),
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=reply_markup
             )
     else:
         await update.callback_query.message.reply_text(f"No subcategories found for the category '{category_name}'.")

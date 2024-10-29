@@ -76,7 +76,7 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE, pa
             
             # Create an inline button for each category
             inline_buttons.append(
-                [InlineKeyboardButton(name, callback_data=f"category_{category.get('_id')}")]
+                [InlineKeyboardButton(name, callback_data=f"category_{category.get('category_id')}")]
             )
 
         combined_description = combined_description.strip()
@@ -138,25 +138,104 @@ async def paginate_categories(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    # Print the query data to see its contents
+    print(f"Query data: {query.data}")  # Debug output
 
-    # Extract category ID from callback data
-    category_id = query.data.split("_")[1]
-    category = categories_collection.find_one({"_id": ObjectId(category_id)})
+    # Extract category ID from callback data and convert to int
+    try:
+        category_id = int(query.data.split("_")[1])  # Ensure this matches your data format
+    except (IndexError, ValueError):
+        await query.message.reply_text("Invalid category selection.")
+        return
+    
+    # Call the new subcategory handler
+    await show_subcategories(update, context, category_id)
 
+
+# New handler to display subcategories
+# New handler to display subcategories
+async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE, category_id: int, page: int = 0) -> None:
+    print(f"Querying subcategories for category_id: {category_id}, page: {page}")  # Debug output
+
+    # Fetch the category to get its name and image
+    category = categories_collection.find_one({"category_id": category_id})
     if category:
-        # Send category details
-        name = category.get("name", "No Name")
-        description = category.get("description", "No Description")
-        image_url = category.get("image_url", None)
-
-        message_text = f"*{name}*\n{description}"
-        
-        if image_url:
-            await query.message.reply_photo(photo=image_url, caption=message_text, parse_mode="Markdown")
-        else:
-            await query.message.reply_text(text=message_text, parse_mode="Markdown")
+        category_name = category.get("name", "Unknown Category")
+        category_image_url = category.get("image_url", None)  # Fetch the image URL
     else:
-        await query.message.reply_text("Category not found.")
+        category_name = "Unknown Category"
+        category_image_url = None
+
+    # Fetch subcategories for the given category_id
+    subcategories = list(db.subcategory.find({"category_id": category_id}))
+
+    # Calculate pagination
+    start_index = page * ITEMS_PER_PAGE
+    end_index = start_index + ITEMS_PER_PAGE
+    paginated_subcategories = subcategories[start_index:end_index]
+
+    if paginated_subcategories:
+        combined_description = f"Category: *{category_name}*\n\n"  # Include the category name
+        inline_buttons = []  # List to hold inline buttons for subcategories
+
+        for subcategory in paginated_subcategories:
+            name = subcategory.get("name", "No Name")
+            # Create an inline button for each subcategory
+            inline_buttons.append(
+                [InlineKeyboardButton(name, callback_data=f"subcategory_{subcategory.get('subcategory_id')}")]
+            )
+
+        # Pagination buttons
+        pagination_buttons = []
+        if page > 0:  # Previous button
+            pagination_buttons.append(
+                InlineKeyboardButton("⬅️ Previous", callback_data=f"subcategory_page_{category_id}_{page - 1}")
+            )
+        if end_index < len(subcategories):  # Next button
+            pagination_buttons.append(
+                InlineKeyboardButton("➡️ Next", callback_data=f"subcategory_page_{category_id}_{page + 1}")
+            )
+
+        # Add pagination buttons to inline buttons if they exist
+        if pagination_buttons:
+            inline_buttons.append(pagination_buttons)
+
+        # Prepare reply markup for inline buttons
+        reply_markup = InlineKeyboardMarkup(inline_buttons)
+
+        # Send category image if available
+        if category_image_url:
+            await update.callback_query.message.reply_photo(
+                photo=category_image_url,
+                caption=combined_description.strip(),
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+        else:
+            await update.callback_query.message.reply_text(
+                combined_description.strip(),
+                parse_mode="Markdown",
+                reply_markup=reply_markup
+            )
+    else:
+        await update.callback_query.message.reply_text(f"No subcategories found for the category '{category_name}'.")
+
+async def paginate_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    # Extract category ID and page number from callback data
+    try:
+        _, category_id, page = query.data.split("_")
+        category_id = int(category_id)
+        page = int(page)
+    except (ValueError, IndexError):
+        await query.message.reply_text("Invalid pagination selection.")
+        return
+
+    # Call show_subcategories with the new page number
+    await show_subcategories(update, context, category_id, page)
+
 
 # Delete account handler
 async def delete_account(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -218,6 +297,8 @@ async def main() -> None:
 
     # Register callback handler for pagination
     application.add_handler(CallbackQueryHandler(paginate_categories, pattern=r"^page_\d+$"))
+    application.add_handler(CallbackQueryHandler(category_selected, pattern=r"^category_\d+$"))
+    application.add_handler(CallbackQueryHandler(paginate_subcategories, pattern=r"^subcategory_page_\d+_\d+$"))
 
     # Run the bot
     await application.run_polling()
