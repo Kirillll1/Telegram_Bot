@@ -1,27 +1,17 @@
 import logging
-import telegram
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup, InputMediaPhoto, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes
 from pymongo import MongoClient
-from datetime import datetime
 import asyncio, nest_asyncio
 from bson.objectid import ObjectId  # Import ObjectId to handle MongoDB object IDs
 from config import *  # Make sure your TELEGRAM_TOKEN is defined in config.py
-from handlers import handle_contact, delete_account, menu, start # Import the separated handlers
-
+from handlers.user_handlers import handle_contact, delete_account # Import the separated handlers
+from handlers.navigation_handlers import menu, start
+from mongodb import categories_collection, db
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
 ITEMS_PER_PAGE = 5
 
-# Configure logging
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-# MongoDB configuration
-MONGO_URI = "mongodb+srv://chobotarkyrylo:ltx8ZOKkpsmwOjAW@cluster0.ofuyj.mongodb.net/my_store_db?retryWrites=true&w=majority&appName=Cluster0"
-client = MongoClient(MONGO_URI)
-db = client['my_store_db']
-customers_collection = db['customers']
-categories_collection = db['categories']
 
 # Define the start command handler
 
