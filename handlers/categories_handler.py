@@ -82,24 +82,7 @@ async def paginate_categories(update: Update, context: ContextTypes.DEFAULT_TYPE
     # Call show_categories with the new page number
     await show_categories(update, context, page=page)
 
-# Callback handler for category buttons
-async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    # Print the query data to see its contents
-    print(f"Query data: {query.data}")  # Debug output
-
-    # Extract category ID from callback data and convert to int
-    try:
-        category_id = int(query.data.split("_")[1])  # Ensure this matches your data format
-    except (IndexError, ValueError):
-        await query.message.reply_text("Invalid category selection.")
-        return
     
-    # Call the new subcategory handler
-    await show_subcategories(update, context, category_id)
-
-
 # New handler to display subcategories
 async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE, category_id: int) -> None:
     print(f"Querying subcategories for category_id: {category_id}")  # Debug output
@@ -146,3 +129,26 @@ async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE,
             )
     else:
         await update.callback_query.message.reply_text(f"No subcategories found for the category '{category_name}'.")
+
+
+
+
+
+# Callback handler for category buttons
+async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    # Print the query data to see its contents
+    print(f"Query data: {query.data}")  # Debug output
+
+    # Extract category ID from callback data and convert to int
+    try:
+        category_id = int(query.data.split("_")[1])  # Ensure this matches your data format
+    except (IndexError, ValueError):
+        await query.message.reply_text("Invalid category selection.")
+        return
+    
+    # Call the new subcategory handler
+    await show_subcategories(update, context, category_id)
+
+

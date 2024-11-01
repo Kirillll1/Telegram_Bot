@@ -5,3 +5,4 @@ config.py
 .Testing
 __pycache__/
 hadlers/__pycache__/
+zalupa.py

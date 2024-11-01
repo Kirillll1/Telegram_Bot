@@ -2,8 +2,6 @@ import logging
 from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 from datetime import datetime
-from pymongo import MongoClient
-from bson.objectid import ObjectId
 from mongodb import customers_collection
 
 
