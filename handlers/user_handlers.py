@@ -4,7 +4,7 @@ from telegram.ext import ContextTypes
 from datetime import datetime
 from mongodb import customers_collection
 
-
+1
 
 async def handle_contact(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user = update.effective_user

@@ -3,7 +3,7 @@ import asyncio, nest_asyncio
 from config import *  # Make sure your TELEGRAM_TOKEN is defined in config.py
 from handlers.user_handlers import handle_contact, delete_account # Import the separated handlers
 from handlers.navigation_handlers import menu, start
-from handlers.categories_handler import show_categories,  paginate_categories, category_selected
+from handlers.categories_handler import show_categories,  paginate_categories, category_selected, subcategory_selected
 from handlers.text_handler import handle_text
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
@@ -25,7 +25,8 @@ async def main() -> None:
     # Register callback handler for pagination
     application.add_handler(CallbackQueryHandler(paginate_categories, pattern=r"^page_\d+$"))
     application.add_handler(CallbackQueryHandler(category_selected, pattern=r"^category_\d+$"))
-    
+    application.add_handler(CallbackQueryHandler(subcategory_selected, pattern=r"^subcategory_\d+_\d+$"))
+
 
     # Run the bot
     await application.run_polling()

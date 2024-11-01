@@ -72,6 +72,25 @@ async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE, pa
     else:
         await update.message.reply_text("No categories found.")
 
+# Callback handler for category buttons
+async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    # Print the query data to see its contents
+    print(f"Query data: {query.data}")  # Debug output
+
+    # Extract category ID from callback data and convert to int
+    try:
+        category_id = int(query.data.split("_")[1])  # Ensure this matches your data format
+    except (IndexError, ValueError):
+        await query.message.reply_text("Invalid category selection.")
+        return
+    
+    # Call the new subcategory handler
+    await show_subcategories(update, context, category_id)
+
+
+
 async def paginate_categories(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -81,9 +100,8 @@ async def paginate_categories(update: Update, context: ContextTypes.DEFAULT_TYPE
 
     # Call show_categories with the new page number
     await show_categories(update, context, page=page)
-
-    
 # New handler to display subcategories
+
 async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE, category_id: int) -> None:
     print(f"Querying subcategories for category_id: {category_id}")  # Debug output
 
@@ -105,9 +123,11 @@ async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
         for subcategory in subcategories:
             name = subcategory.get("name", "No Name")
+            subcategory_id = subcategory.get('subcategory_id')
+
             # Create an inline button for each subcategory
             inline_buttons.append(
-                [InlineKeyboardButton(name, callback_data=f"subcategory_{subcategory.get('subcategory_id')}")]
+                [InlineKeyboardButton(name, callback_data=f"subcategory_{subcategory_id}_{category_id}")]
             )
 
         # Prepare reply markup for inline buttons
@@ -134,21 +154,46 @@ async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 
-# Callback handler for category buttons
-async def category_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+from telegram import Update
+from telegram.ext import ContextTypes
+from telegram.error import BadRequest
+
+async def subcategory_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    # Print the query data to see its contents
-    print(f"Query data: {query.data}")  # Debug output
-
-    # Extract category ID from callback data and convert to int
+    
     try:
-        category_id = int(query.data.split("_")[1])  # Ensure this matches your data format
+        _, subcategory_id, category_id = query.data.split("_")
+        subcategory_id = int(subcategory_id)
+        category_id = int(category_id)
     except (IndexError, ValueError):
-        await query.message.reply_text("Invalid category selection.")
+        await query.message.reply_text("Invalid subcategory selection.")
         return
     
-    # Call the new subcategory handler
-    await show_subcategories(update, context, category_id)
+    print(f"Selected Subcategory ID: {subcategory_id}, Category ID: {category_id}")
 
+    # Fetch products based on the selected category and subcategory
+    products = list(db.products.find({"category_id": category_id, "subcategory_id": subcategory_id}).limit(5))
 
+    if products:
+        for product in products:
+            product_name = product.get("product_name", "No Name")
+            description = product.get("description", "No Description")
+            price = product.get("price", "Price not available")
+            image_url = product.get("image_url", "")
+
+            # Prepare the message for the product
+            product_message = f"*{product_name}*\n\n*Опис:* {description}\n\n*Ціна:* {price}\n"
+
+            if image_url:
+                try:
+                    # Send the product image along with the description
+                    await query.message.reply_photo(photo=image_url, caption=product_message, parse_mode="Markdown")
+                except BadRequest:
+                    # If there's an error with the image, just send the text message without the image
+                    await query.message.reply_text(product_message, parse_mode="Markdown")
+            else:
+                # Send message without an image if the URL is not available
+                await query.message.reply_text(product_message, parse_mode="Markdown")
+    else:
+        await query.message.reply_text(f"No products found for the selected subcategory.")
