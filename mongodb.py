@@ -8,3 +8,5 @@ client = MongoClient(MONGO_URI)
 db = client['my_store_db']
 customers_collection = db['customers']
 categories_collection = db['categories']
+cart_collection = db['cart']
+orders_collection = db['order']

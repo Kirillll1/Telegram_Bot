@@ -1,7 +1,10 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from mongodb import categories_collection, db
-
+from telegram.error import BadRequest 
+from mongodb import categories_collection, db, cart_collection
+from datetime import datetime
+import logging
+logging.basicConfig(level=logging.INFO)
 ITEMS_PER_PAGE = 5
 
 async def show_categories(update: Update, context: ContextTypes.DEFAULT_TYPE, page=0) -> None:
@@ -154,14 +157,12 @@ async def show_subcategories(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
 
 
-from telegram import Update
-from telegram.ext import ContextTypes
-from telegram.error import BadRequest
-
 async def subcategory_selected(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    
     query = update.callback_query
     await query.answer()
     
+    # Parse subcategory and category ID from the callback data
     try:
         _, subcategory_id, category_id = query.data.split("_")
         subcategory_id = int(subcategory_id)
@@ -170,30 +171,129 @@ async def subcategory_selected(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.message.reply_text("Invalid subcategory selection.")
         return
     
-    print(f"Selected Subcategory ID: {subcategory_id}, Category ID: {category_id}")
-
     # Fetch products based on the selected category and subcategory
     products = list(db.products.find({"category_id": category_id, "subcategory_id": subcategory_id}).limit(5))
 
     if products:
         for product in products:
+            product_id = product.get("product_id")
             product_name = product.get("product_name", "No Name")
             description = product.get("description", "No Description")
             price = product.get("price", "Price not available")
             image_url = product.get("image_url", "")
 
             # Prepare the message for the product
-            product_message = f"*{product_name}*\n\n*Опис:* {description}\n\n*Ціна:* {price}\n"
+            product_message = f"*{product_name}*\n\n*Description:* {description}\n\n*Price:* {price}\n"
+
+            # Inline button to add product to cart
+            add_to_cart_button = InlineKeyboardMarkup([[
+                InlineKeyboardButton("Add to Cart", callback_data=f"addtocart_{product_id}")
+            ]])
 
             if image_url:
                 try:
-                    # Send the product image along with the description
-                    await query.message.reply_photo(photo=image_url, caption=product_message, parse_mode="Markdown")
+                    # Send the product image along with the description and "Add to Cart" button
+                    await query.message.reply_photo(
+                        photo=image_url,
+                        caption=product_message,
+                        parse_mode="Markdown",
+                        reply_markup=add_to_cart_button
+                    )
                 except BadRequest:
-                    # If there's an error with the image, just send the text message without the image
-                    await query.message.reply_text(product_message, parse_mode="Markdown")
+                    await query.message.reply_text(
+                        product_message,
+                        parse_mode="Markdown",
+                        reply_markup=add_to_cart_button
+                    )
             else:
-                # Send message without an image if the URL is not available
-                await query.message.reply_text(product_message, parse_mode="Markdown")
+                await query.message.reply_text(
+                    product_message,
+                    parse_mode="Markdown",
+                    reply_markup=add_to_cart_button
+                )
     else:
-        await query.message.reply_text(f"No products found for the selected subcategory.")
+        await query.message.reply_text("No products found for the selected subcategory.")
+# Handler function for adding products to the cart
+async def add_to_cart(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+
+    logging.info("Add to Cart button clicked.")  # Log that the button was clicked
+
+    # Parse product ID from the callback data
+    try:
+        _, product_id = query.data.split("_")
+        product_id = int(product_id)  # Ensure product_id is treated as an integer
+        logging.info(f"Parsed product_id: {product_id}")  # Log the parsed product_id
+    except (IndexError, ValueError) as e:
+        logging.error(f"Error parsing callback data: {str(e)}")  # Log any error during parsing
+        await query.message.reply_text("Error adding product to cart.")
+        return
+
+    # Retrieve product details from MongoDB
+    product = db.products.find_one({"product_id": product_id})
+    if not product:
+        logging.error(f"Product with ID {product_id} not found in the database.")  # Log if product not found
+        await query.message.reply_text("Product not found.")
+        return
+
+    logging.info(f"Product found: {product['product_name']}")  # Log if product is found
+
+    # Use the telegram_id as the identifier for each user's cart
+    telegram_id = update.effective_user.id
+
+    # Cart item details
+    cart_item = {
+        "product_id": product["product_id"],
+        "product_name": product["product_name"],
+        "price": product["price"],
+        "quantity": 1,  # Default quantity
+        "total_price": product["price"]
+    }
+
+    # Check if an active cart exists for the user
+    user_cart = cart_collection.find_one({"telegram_id": telegram_id, "status": "active"})
+    logging.info(f"User cart found: {user_cart is not None}")  # Log if user cart exists or not
+
+    if user_cart:
+        # Update cart if product already exists, otherwise add new item
+        existing_product = next((item for item in user_cart["products"] if item["product_id"] == product_id), None)
+        
+        if existing_product:
+            logging.info(f"Product {product_id} already in the cart. Updating quantity.")  # Log if product is already in cart
+            
+            # Update quantity and total price for the existing product
+            db.cart.update_one(
+                {"telegram_id": telegram_id, "status": "active", "products.product_id": product_id},
+                {
+                    "$inc": {
+                        "products.$.quantity": 1,  # Increment quantity by 1
+                        "products.$.total_price": product["price"],  # Increment total price for the specific product
+                        "total_price": product["price"]  # Increment overall cart total price
+                    }
+                }
+            )
+        else:
+            logging.info(f"Product {product_id} not in the cart. Adding new item.")  # Log if adding new item
+            # Add new product to the cart
+            db.cart.update_one(
+                {"telegram_id": telegram_id, "status": "active"},
+                {
+                    "$push": {"products": cart_item},  # Add new product to the cart array
+                    "$inc": {"total_price": product["price"]}  # Increment overall cart total price
+                }
+            )
+    else:
+        logging.info("No active cart found. Creating new cart.")  # Log if no active cart
+        # Create a new cart if no active cart exists
+        new_cart = {
+            "telegram_id": telegram_id,
+            "products": [cart_item],
+            "total_price": product["price"],
+            "status": "active",
+            "created_at": datetime.utcnow()
+        }
+        db.cart.insert_one(new_cart)
+
+    logging.info(f"{product['product_name']} added to the cart.")  # Log successful addition to cart
+    await query.message.reply_text(f"{product['product_name']} added to your cart.")
