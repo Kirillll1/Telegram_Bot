@@ -4,7 +4,8 @@ from config import *  # Make sure your TELEGRAM_TOKEN is defined in config.py
 from handlers.user_handlers import handle_contact, delete_account # Import the separated handlers
 from handlers.navigation_handlers import menu, start
 from handlers.categories_handler import show_categories,  paginate_categories, category_selected, subcategory_selected
-from handlers.cart_handler import add_to_cart, view_cart, clear_cart, delete_item, send_invoice, pre_checkout_handler, successful_payment_handler
+from handlers.cart_handler import add_to_cart, view_cart, clear_cart, delete_item
+from handlers.payment_handler import send_invoice, pre_checkout_handler, successful_payment_handler
 from handlers.text_handler import handle_text, handle_inline_cart_action
 from telegram.ext import PreCheckoutQueryHandler
 # Apply nest_asyncio to allow nested event loops
