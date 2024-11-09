@@ -4,8 +4,9 @@ from config import *  # Make sure your TELEGRAM_TOKEN is defined in config.py
 from handlers.user_handlers import handle_contact, delete_account # Import the separated handlers
 from handlers.navigation_handlers import menu, start
 from handlers.categories_handler import show_categories,  paginate_categories, category_selected, subcategory_selected
-from handlers.cart_handler import add_to_cart, view_cart, clear_cart, delete_item
+from handlers.cart_handler import add_to_cart, view_cart, clear_cart, delete_item, send_invoice, pre_checkout_handler, successful_payment_handler
 from handlers.text_handler import handle_text, handle_inline_cart_action
+from telegram.ext import PreCheckoutQueryHandler
 # Apply nest_asyncio to allow nested event loops
 nest_asyncio.apply()
 
@@ -32,7 +33,12 @@ async def main() -> None:
     application.add_handler(CallbackQueryHandler(delete_item, pattern="^delete_item_"))
     application.add_handler(CommandHandler("clearcart", clear_cart))
     application.add_handler(CommandHandler("viewcart", view_cart))
-    application.add_handler(CallbackQueryHandler(handle_inline_cart_action))
+    application.add_handler(CallbackQueryHandler(send_invoice, pattern="^proceed_to_payment$"))
+    application.add_handler(CallbackQueryHandler(handle_inline_cart_action))  # Add your other handlers here
+    application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
+
+
 
 
     # Run the bot
